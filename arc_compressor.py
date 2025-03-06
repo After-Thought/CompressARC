@@ -31,15 +31,36 @@ class ARCCompressor:
     def channel_dim_fn(self, dims):
         return 16 if dims[2] == 0 else 8
 
-    def __init__(self, task):
+    def __init__(self, task, n_layers=4, share_up_dim=16, share_down_dim=8, 
+                 decoding_dim=4, softmax_dim=2, cummax_dim=4, shift_dim=4, 
+                 nonlinear_dim=16):
         """
         Create a model that is tailored to the given task, and initialize all the weights.
         The weights are symmetrized such that swapping the x and y dimension ordering should
         make the output's dimension ordering also swapped, for the same weights. This may not
         be exactly correct since symmetrizing all operations is difficult.
+        
         Args:
             task (preprocessing.Task): The task which the model is to be made for solving.
+            n_layers (int, optional): Number of layers in the model. Defaults to 4.
+            share_up_dim (int, optional): Dimension for sharing up. Defaults to 16.
+            share_down_dim (int, optional): Dimension for sharing down. Defaults to 8.
+            decoding_dim (int, optional): Dimension for decoding. Defaults to 4.
+            softmax_dim (int, optional): Dimension for softmax. Defaults to 2.
+            cummax_dim (int, optional): Dimension for cummax. Defaults to 4.
+            shift_dim (int, optional): Dimension for shift. Defaults to 4.
+            nonlinear_dim (int, optional): Dimension for nonlinear operations. Defaults to 16.
         """
+        # Configuration values
+        self.n_layers = n_layers
+        self.share_up_dim = share_up_dim
+        self.share_down_dim = share_down_dim
+        self.decoding_dim = decoding_dim
+        self.softmax_dim = softmax_dim
+        self.cummax_dim = cummax_dim
+        self.shift_dim = shift_dim
+        self.nonlinear_dim = nonlinear_dim
+        
         self.multitensor_system = task.multitensor_system
 
         # Initialize weights

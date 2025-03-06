@@ -1,6 +1,9 @@
 import os
 import pickle
 from tqdm import tqdm
+import argparse
+import yaml
+from typing import Dict, Any
 
 import numpy as np
 import torch
@@ -33,33 +36,114 @@ the task code, and it will:
 np.random.seed(0)
 torch.manual_seed(0)
 torch.set_default_dtype(torch.float32)
-torch.set_default_device('cuda')
+
+def load_config(config_path: str) -> Dict[str, Any]:
+    """Load configuration from YAML file."""
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
+
+def get_default_config() -> Dict[str, Any]:
+    """Get default configuration."""
+    return {
+        'cli_args': {
+            'split': None,
+            'task': None,
+            'output_dir': 'outputs',
+            'device': 'cuda:0'
+        },
+        'model': {
+            'n_layers': 4,
+            'share_up_dim': 16,
+            'share_down_dim': 8,
+            'decoding_dim': 4,
+            'softmax_dim': 2,
+            'cummax_dim': 4,
+            'shift_dim': 4,
+            'nonlinear_dim': 16
+        },
+        'optimizer': {
+            'lr': 0.01,
+            'betas': [0.5, 0.9]
+        },
+        'training': {
+            'n_iterations': 1500,
+            'plot_interval': 50
+        }
+    }
 
 if __name__ == "__main__":
+    # Add argument parsing
+    parser = argparse.ArgumentParser(description='Analyze ARC task training and visualization')
+    parser.add_argument('--split', type=str, choices=['training', 'evaluation', 'test'],
+                      help='which split to find the task in (training, evaluation, test)')
+    parser.add_argument('--task', type=str,
+                      help='task ID to analyze (eg. 272f95fa)')
+    parser.add_argument('--output-dir', type=str, default='outputs',
+                      help='directory to store output files (default: outputs)')
+    parser.add_argument('--config', type=str,
+                      help='path to YAML config file')
+    parser.add_argument('--device', type=str, default='cuda:0',
+                      help='device to run on (default: cuda:0)')
+    args = parser.parse_args()
 
-    # Some interesting tasks: 272f95fa, 6d75e8bb, 6cdd2623, 41e4d17e, 2bee17df
-    # 228f6490, 508bd3b6, 2281f1f4, ecdecbb3
-    split = input('Enter which split you want to find the task in (training, evaluation, test): ')
-    task_name = input('Enter which task you want to analyze (eg. 272f95fa): ')
-    folder = task_name + '/'
+    # Load configuration
+    config = get_default_config()
+    if args.config:
+        config.update(load_config(args.config))
+    
+    # Command line args override config file
+    if args.split:
+        config['cli_args']['split'] = args.split
+    if args.task:
+        config['cli_args']['task'] = args.task
+    if args.output_dir:
+        config['cli_args']['output_dir'] = args.output_dir
+    if args.device:
+        config['cli_args']['device'] = args.device
+
+    # Set device
+    torch.set_default_device(config['cli_args']['device'])
+
+    # Use config values or prompt user
+    split = config['cli_args']['split']
+    if not split:
+        split = input('Enter which split you want to find the task in (training, evaluation, test): ')
+    
+    task_name = config['cli_args']['task']
+    if not task_name:
+        task_name = input('Enter which task you want to analyze (eg. 272f95fa): ')
+
+    # Use the specified output directory
+    folder = os.path.join(config['cli_args']['output_dir'], task_name + '/')
     print('Performing a training run on task', task_name,
           'and placing the results in', folder)
     os.makedirs(folder, exist_ok=True)
 
     # Preprocess the task, set up the training
     task = preprocessing.preprocess_tasks(split, [task_name])[0]
-    model = arc_compressor.ARCCompressor(task)
-    optimizer = torch.optim.Adam(model.weights_list, lr=0.01, betas=(0.5, 0.9))
+    
+    # Create model with config
+    model = arc_compressor.ARCCompressor(task, **config['model'])
+    
+    # Create optimizer with config
+    optimizer = torch.optim.Adam(
+        model.weights_list, 
+        lr=config['optimizer']['lr'], 
+        betas=tuple(config['optimizer']['betas'])
+    )
+    
     train_history_logger = solution_selection.Logger(task)
     visualization.plot_problem(train_history_logger)
 
-    # Perform training for 1500 iterations
-    n_iterations = 1500
+    # Perform training using config
+    n_iterations = config['training']['n_iterations']
+    plot_interval = config['training']['plot_interval']
+    
     for train_step in tqdm(range(n_iterations)):
         train.take_step(task, model, optimizer, train_step, train_history_logger)
         
-        # Plot solutions every 50 steps
-        if (train_step+1) % 50 == 0:
+        # Plot solutions at specified interval
+        if (train_step+1) % plot_interval == 0:
             visualization.plot_solution(train_history_logger,
                 fname=folder + task_name + '_at_' + str(train_step+1) + ' steps.png')
             visualization.plot_solution(train_history_logger,
