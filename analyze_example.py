@@ -9,14 +9,6 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 
-import train
-import preprocessing
-import arc_compressor
-import initializers
-import multitensor_systems
-import layers
-import solution_selection
-import visualization
 
 
 """
@@ -31,11 +23,7 @@ the task code, and it will:
   the KL at the end of training.
 """
 
-# For some reason trying to set the seed doesn't actually fix results.
-# Just run things over and over again until you see desired interesting behaviors.
-np.random.seed(0)
-torch.manual_seed(0)
-torch.set_default_dtype(torch.float32)
+
 
 def load_config(config_path: str) -> Dict[str, Any]:
     """Load configuration from YAML file."""
@@ -47,6 +35,7 @@ def get_default_config() -> Dict[str, Any]:
     return {
         'cli_args': {
             'split': None,
+            'tasks': None,
             'task': None,
             'output_dir': 'outputs',
             'device': 'cuda:0'
@@ -72,7 +61,7 @@ def get_default_config() -> Dict[str, Any]:
     }
 
 if __name__ == "__main__":
-    # Add argument parsing
+    # Parse args and load config first
     parser = argparse.ArgumentParser(description='Analyze ARC task training and visualization')
     parser.add_argument('--split', type=str, choices=['training', 'evaluation', 'test'],
                       help='which split to find the task in (training, evaluation, test)')
@@ -86,23 +75,42 @@ if __name__ == "__main__":
                       help='device to run on (default: cuda:0)')
     args = parser.parse_args()
 
-    # Load configuration
-    config = get_default_config()
+    # Fix the config loading logic
     if args.config:
-        config.update(load_config(args.config))
-    
-    # Command line args override config file
+        # Load the config file first
+        config = load_config(args.config)
+    else:
+        # If no config file, use defaults
+        config = get_default_config()
+
+    # Then apply any command line overrides
     if args.split:
         config['cli_args']['split'] = args.split
     if args.task:
         config['cli_args']['task'] = args.task
-    if args.output_dir:
+        config['cli_args']['tasks'] = [args.task]
+    if args.output_dir != 'outputs':  # Only override if explicitly set
         config['cli_args']['output_dir'] = args.output_dir
-    if args.device:
+    if args.device != 'cuda:0':  # Only override if explicitly set
         config['cli_args']['device'] = args.device
 
-    # Set device
+    # Set device BEFORE importing other modules
     torch.set_default_device(config['cli_args']['device'])
+
+    import train
+    import preprocessing
+    import arc_compressor
+    import initializers
+    import multitensor_systems
+    import layers
+    import solution_selection
+    import visualization
+
+    # For some reason trying to set the seed doesn't actually fix results.
+    # Just run things over and over again until you see desired interesting behaviors.
+    np.random.seed(0)
+    torch.manual_seed(0)
+    torch.set_default_dtype(torch.float32)
 
     # Use config values or prompt user
     split = config['cli_args']['split']
@@ -111,10 +119,13 @@ if __name__ == "__main__":
     
     task_name = config['cli_args']['task']
     if not task_name:
-        task_name = input('Enter which task you want to analyze (eg. 272f95fa): ')
+        if config['cli_args']['tasks']:
+            task_name = config['cli_args']['tasks'][0]
+        else:
+            task_name = input('Enter which task you want to analyze (eg. 272f95fa): ')
 
     # Use the specified output directory
-    folder = os.path.join(config['cli_args']['output_dir'], task_name + '/')
+    folder = f"{config['cli_args']['output_dir'].rstrip('/')}/{task_name}/"
     print('Performing a training run on task', task_name,
           'and placing the results in', folder)
     os.makedirs(folder, exist_ok=True)

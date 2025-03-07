@@ -1,13 +1,13 @@
 # Command line arguments
 cli_args:
   split: "training"
-  task: "28e73c20"
-  output_dir: "outputs"
-  device: "cuda:0"
+  tasks: ["28e73c20", "5c2c9af4", "6b9890af"]
+  output_dir: "outputs/depth_experiment/layer8_model"
+  device: "cuda:2"
 
 # Model configuration
 model:
-  n_layers: 4
+  n_layers: 8
   share_up_dim: 16
   share_down_dim: 8
   decoding_dim: 4
@@ -23,5 +23,11 @@ optimizer:
 
 # Training configuration
 training:
-  n_iterations: 1500
+  n_iterations: 2500
   plot_interval: 50 
+
+
+
+
+
+
